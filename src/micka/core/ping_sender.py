@@ -5,10 +5,11 @@ from ipaddress import IPv4Address
 from typing import override
 
 from icmplib import ICMPRequest
+from icmplib.exceptions import ICMPSocketError, SocketBroadcastError
 from icmplib.sockets import ICMPSocket
 
 from .address_que import AddressQue
-from .address_status_store import AddressStatusStore, AddressStatus
+from .address_status_store import AddressStatusStore, AddressStatus, AddressResult
 from .ping_task_pool import PingTaskPool
 
 _logger = logging.getLogger(__name__)
@@ -67,10 +68,28 @@ class PingSender(AddressQue):
                     task = self.task_pool.create_new_task(address)
 
                     if task is not None:
-                        self.que.pop(0)
                         request = ICMPRequest(destination=str(task.address), id=1, sequence=task.sequence_id)
-                        self.icmp_socket.send(request)
-                        _logger.info(f'Ping has sent for IP address: {address}')
+
+                        try:
+                            self.icmp_socket.send(request)
+                        except SocketBroadcastError:
+                            # broadcast addresses can never be sent to; retrying won't help
+                            self.que.pop(0)
+                            self.task_pool.pop_task(task.sequence_id)
+                            await self.status_store.mark_as_done(address, AddressResult(responded=False))
+                            _logger.warning(f'Skipping broadcast address: {address}')
+                        except ICMPSocketError as error:
+                            # e.g. [Errno 11] Resource temporarily unavailable: the socket's
+                            # send buffer is full (often unresolved ARP requests piling up for
+                            # unreachable hosts)
+                            self.que.pop(0)
+                            self.task_pool.pop_task(task.sequence_id)
+                            await self.status_store.mark_as_pending(address)
+                            _logger.warning(f'Ping send failed for {address}, will retry: {error}')
+                            break
+                        else:
+                            self.que.pop(0)
+                            _logger.info(f'Ping has sent for IP address: {address}')
                     else:
                         await self.status_store.mark_as_queued(address)
                         # _logger.info('Ping task creation has failed by task pool limit')
