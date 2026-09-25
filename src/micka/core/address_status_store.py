@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from ipaddress import IPv4Address
 
+from bitarray import bitarray
+from bitarray.util import ba2int
+
 
 class AddressStatus(Enum):
     PENDING = auto()
@@ -43,49 +46,94 @@ class AddressStatusStore(ABC):
     async def mark_as_done(self, address: IPv4Address, result: AddressResult): ...
 
 
+_BINARY_STATUS_MAP = {
+    0b00: AddressStatus.PENDING,
+    0b01: AddressStatus.QUEUED,
+    0b10: AddressStatus.PROCESSING,
+    0b11: AddressStatus.DONE
+}
+_STATUS_BINARY_MAP = {_BINARY_STATUS_MAP[binary]: binary for binary in _BINARY_STATUS_MAP}
+
+_CHUNK_ADDRESS_COUNT = 0x0100_0000  # a chunk covers a /8 range (2 ** 24 addresses)
+_CHUNK_BIT_LENGTH = _CHUNK_ADDRESS_COUNT * 2  # each address occupies 2 bits
+
+
+def _to_bit_offset(address: IPv4Address) -> int:
+    return (int(address) & 0x00ff_ffff) * 2
+
+
 class InmemoryAddressStatusStore(AddressStatusStore):
     def __init__(self):
-        self._records: dict[IPv4Address, AddressRecord] = dict()
+        self._status_chunks: dict[int, bitarray] = dict()
+        self._result_chunks: dict[int, bitarray] = dict()
 
-    def _get_or_default(self, address: IPv4Address) -> AddressRecord:
-        if address in self._records:
-            return self._records[address]
-        else:
-            return AddressRecord(address=address)
+    def _get_status_chunk(self, index: int) -> bitarray:
+        if index not in self._status_chunks:
+            self._status_chunks[index] = bitarray(_CHUNK_BIT_LENGTH)
+        return self._status_chunks[index]
+
+    def _get_result_chunk(self, index: int) -> bitarray:
+        if index not in self._result_chunks:
+            self._result_chunks[index] = bitarray(_CHUNK_BIT_LENGTH)
+        return self._result_chunks[index]
 
     async def get_status(self, address: IPv4Address) -> AddressStatus:
-        return self._get_or_default(address).status
+        chunk_index = int(address) >> 24
+        if chunk_index in self._status_chunks:
+            chunk = self._status_chunks[chunk_index]
+            offset = _to_bit_offset(address)
+            value = ba2int(chunk[offset:offset + 2])
+
+            return _BINARY_STATUS_MAP[value]
+        else:
+            return AddressStatus.PENDING
 
     async def get_last_result(self, address: IPv4Address) -> AddressResult | None:
-        return self._get_or_default(address).last_result
+        chunk_index = int(address) >> 24
+        if chunk_index in self._result_chunks:
+            chunk = self._result_chunks[chunk_index]
+            offset = _to_bit_offset(address)
+            raw_result = chunk[offset:offset + 2]
+
+            if raw_result[0] == 0:
+                return None
+            else:
+                return AddressResult(responded=bool(raw_result[1]))
+        else:
+            return None
 
     async def mark_as_pending(self, address: IPv4Address):
-        record = self._get_or_default(address)
-        self._records[address] = AddressRecord(
-            address=address,
-            status=AddressStatus.PENDING,
-            last_result=record.last_result
-        )
+        chunk_index = int(address) >> 24
+        offset = _to_bit_offset(address)
+
+        status_chunk = self._get_status_chunk(chunk_index)
+        status_chunk[offset] = 0
+        status_chunk[offset + 1] = 0
 
     async def mark_as_queued(self, address: IPv4Address):
-        record = self._get_or_default(address)
-        self._records[address] = AddressRecord(
-            address=address,
-            status=AddressStatus.QUEUED,
-            last_result=record.last_result
-        )
+        chunk_index = int(address) >> 24
+        offset = _to_bit_offset(address)
+
+        status_chunk = self._get_status_chunk(chunk_index)
+        status_chunk[offset] = 0
+        status_chunk[offset + 1] = 1
 
     async def mark_as_processing(self, address: IPv4Address):
-        record = self._get_or_default(address)
-        self._records[address] = AddressRecord(
-            address=address,
-            status=AddressStatus.PROCESSING,
-            last_result=record.last_result
-        )
+        chunk_index = int(address) >> 24
+        offset = _to_bit_offset(address)
+
+        status_chunk = self._get_status_chunk(chunk_index)
+        status_chunk[offset] = 1
+        status_chunk[offset + 1] = 0
 
     async def mark_as_done(self, address: IPv4Address, result: AddressResult):
-        self._records[address] = AddressRecord(
-            address=address,
-            status=AddressStatus.DONE,
-            last_result=result
-        )
+        chunk_index = int(address) >> 24
+        offset = _to_bit_offset(address)
+
+        status_chunk = self._get_status_chunk(chunk_index)
+        status_chunk[offset] = 1
+        status_chunk[offset + 1] = 1
+
+        result_chunk = self._get_result_chunk(chunk_index)
+        result_chunk[offset] = 1
+        result_chunk[offset + 1] = bool(result.responded)

@@ -10,12 +10,7 @@ _STRING_STATUS_MAP = {
     'PR': AddressStatus.PROCESSING,
     'DO': AddressStatus.DONE
 }
-_STATUS_STRING_MAP = {
-    AddressStatus.PENDING: 'PE',
-    AddressStatus.QUEUED: 'QU',
-    AddressStatus.PROCESSING: 'PR',
-    AddressStatus.DONE: 'DO'
-}
+_STATUS_STRING_MAP = {_STRING_STATUS_MAP[string]: string for string in _STRING_STATUS_MAP}
 
 
 def _to_status(value: str | bytes | None) -> AddressStatus | None:

@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "bitarray>=3.11.0",
     "dependency-injector>=4.49.1",
     "dotenv>=0.9.9",
     "icmplib>=3.0.4",

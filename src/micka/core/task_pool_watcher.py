@@ -1,8 +1,11 @@
 import asyncio
+import logging
 import time
 
 from micka.core.address_status_store import AddressStatusStore, AddressResult
 from micka.core.ping_task_pool import MAX_SEQUENCE_ID, PingTaskPool
+
+_logger = logging.getLogger(__name__)
 
 
 class TaskPoolWatcher:

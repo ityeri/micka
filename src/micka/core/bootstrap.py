@@ -125,7 +125,7 @@ class Bootstrapper:
 
     async def arun(self):
         print(f'{_logger.name}: Setup logging...')
-        reger.setup_logging(level=logging.WARNING)
+        reger.setup_logging(level=logging.INFO)
         _logger.info('I hope you can see this')
 
         _logger.info('Creating required instances...')

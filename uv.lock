@@ -82,6 +82,7 @@ name = "micka"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "bitarray" },
     { name = "dependency-injector" },
     { name = "dotenv" },
     { name = "icmplib" },
@@ -91,6 +92,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bitarray", specifier = ">=3.11.0" },
     { name = "dependency-injector", specifier = ">=4.49.1" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "icmplib", specifier = ">=3.0.4" },
