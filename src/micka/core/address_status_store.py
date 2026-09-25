@@ -4,7 +4,7 @@ from enum import Enum, auto
 from ipaddress import IPv4Address
 
 from bitarray import bitarray
-from bitarray.util import ba2int
+from bitarray.util import ba2int, int2ba
 
 
 class AddressStatus(Enum):
@@ -102,38 +102,28 @@ class InmemoryAddressStatusStore(AddressStatusStore):
         else:
             return None
 
-    async def mark_as_pending(self, address: IPv4Address):
+    def _set_status(self, address: IPv4Address, status: AddressStatus):
         chunk_index = int(address) >> 24
         offset = _to_bit_offset(address)
 
         status_chunk = self._get_status_chunk(chunk_index)
-        status_chunk[offset] = 0
-        status_chunk[offset + 1] = 0
+        status_chunk[offset:offset + 2] = int2ba(_STATUS_BINARY_MAP[status], length=2)
+
+    async def mark_as_pending(self, address: IPv4Address):
+        self._set_status(address, AddressStatus.PENDING)
 
     async def mark_as_queued(self, address: IPv4Address):
-        chunk_index = int(address) >> 24
-        offset = _to_bit_offset(address)
-
-        status_chunk = self._get_status_chunk(chunk_index)
-        status_chunk[offset] = 0
-        status_chunk[offset + 1] = 1
+        self._set_status(address, AddressStatus.QUEUED)
 
     async def mark_as_processing(self, address: IPv4Address):
-        chunk_index = int(address) >> 24
-        offset = _to_bit_offset(address)
-
-        status_chunk = self._get_status_chunk(chunk_index)
-        status_chunk[offset] = 1
-        status_chunk[offset + 1] = 0
+        self._set_status(address, AddressStatus.PROCESSING)
 
     async def mark_as_done(self, address: IPv4Address, result: AddressResult):
+        self._set_status(address, AddressStatus.DONE)
+
         chunk_index = int(address) >> 24
         offset = _to_bit_offset(address)
-
-        status_chunk = self._get_status_chunk(chunk_index)
-        status_chunk[offset] = 1
-        status_chunk[offset + 1] = 1
 
         result_chunk = self._get_result_chunk(chunk_index)
         result_chunk[offset] = 1
-        result_chunk[offset + 1] = bool(result.responded)
+        result_chunk[offset + 1] = int(result.responded)
