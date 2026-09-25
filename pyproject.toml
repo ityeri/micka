@@ -1,0 +1,29 @@
+[project]
+name = "micka"
+version = "0.1.0"
+description = "IPv4 Ping scanner"
+readme = "README.md"
+authors = [
+    { name = "ityeri", email = "ityeri9@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "dependency-injector>=4.49.1",
+    "dotenv>=0.9.9",
+    "icmplib>=3.0.4",
+    "redis>=8.1.0",
+    "reger>=0.1.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "micka.core"
+
+[tool.uv.workspace]
+members = [
+    "packages/viewer",
+]
+

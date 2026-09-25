@@ -1,0 +1,28 @@
+[project]
+name = "viewer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "ityeri", email = "ityeri9@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "bitarray>=3.11.0",
+    "micka",
+    "pygame>=2.6.1",
+]
+
+[project.scripts]
+viewer = "viewer:main"
+
+[tool.uv.build-backend]
+module-name = "micka.viewer"
+
+[tool.uv.sources]
+micka = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
+
